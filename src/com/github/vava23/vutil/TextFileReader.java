@@ -1,4 +1,4 @@
-package io.github.vava23.vutil;
+package com.github.vava23.vutil;
 
 import java.io.FileInputStream;
 import java.io.FileReader;
@@ -54,13 +54,21 @@ public class TextFileReader {
 
         /** Clears the buffer completely */
         public void clear() {
-            // TODO: STUB
-            return;
+            fBufferMain.clear();
+            fBufferAux.clear();
         }
 
         /** Prepares the buffer to read the new sequence of lines */
         public void startWriting() {
-            // TODO: STUB
+            // If we've already got a buffer, create a new one over it
+            if (fBufferMain.size() > 0) {
+                // Current main buffer is attached to the auxiliary, and the
+                // new buffer is created instead
+                fBufferAux.push(fBufferMain);
+                fBufferMain = new LinkedList();
+            }
+            // Once the buffer is empty, everything is ready to write
+            // operations
             return;
         }
 
@@ -75,8 +83,10 @@ public class TextFileReader {
 
         /** Reads line from buffer */
         public String readLine() {
-            // TODO: STUB
-            return "";
+            // Buffer must be not empty
+            if (fBufferMain.size() > 0) throw new java.lang.IllegalStateException();
+            // Read a line from main buffer
+            String result = fBufferMain.
         }
 
         /** Saves line to the buffer */
