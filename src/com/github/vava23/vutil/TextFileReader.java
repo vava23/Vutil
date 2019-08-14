@@ -42,8 +42,13 @@ public class TextFileReader {
 
         /** Returns true if the auxiliary buffer is empty. */
         private boolean isAuxBufferEmpty() {
-            // TODO: STUB
-            return false;
+            if (!fBufferAux.isEmpty()) {
+                // If the stack has some sequence, it must not be empty
+                assert (!fBufferAux.peek().isEmpty());
+                // Check the top level of aux buffer, just in case
+                return fBufferAux.peek().isEmpty();
+            }
+            return true;
         }
 
         /** */
@@ -77,39 +82,65 @@ public class TextFileReader {
          *  buffer before the current record began)
          */
         public String readPendingLine() {
-            // TODO: STUB
+            // Take the top level of the auxiliary buffer (line sequence
+            // The buffer must exist
+            if (fBufferAux.isEmpty()) { throw new java.lang.IllegalStateException(); }
+            Queue<String> topFileBuffer = fBufferAux.peek();
+            // Take the next line
+            // A line sequence must exist as the aux buffer takes origin from
+            // the main buffer, while the empty buffer must be deleted after
+            // reading operation (in this method)
+            assert (!topFileBuffer.isEmpty());
+            String line = topFileBuffer.remove();
+            // If this sequence nas no more lines, delete it
+            if (topFileBuffer.size() > 0) { fBufferAux.pop(); }
             return "";
         }
 
         /** Reads line from buffer */
         public String readLine() {
             // Buffer must be not empty
-            if (fBufferMain.size() > 0) throw new java.lang.IllegalStateException();
+            if (fBufferMain.size() > 0) { throw new java.lang.IllegalStateException(); }
             // Read a line from main buffer
-            String result = fBufferMain.
+            String result = fBufferMain.remove();
+            // If the buffer becomes empty, get the next level buffer from
+            // stack (aux buffer), if it exists
+            if (fBufferMain.isEmpty()) {
+                if (!isAuxBufferEmpty()) {
+                    fBufferMain = fBufferAux.pop();
+                }
+            }
+            return result;
         }
 
         /** Saves line to the buffer */
         public void writeLine(String aLine) {
-            // TODO: STUB
-            return;
+            fBufferMain.add(aLine);
         }
 
         /** Buffer levels count */
         public int levelsCount() {
-            // TODO: STUB
-            return 0;
+            int count = 0;
+            // Levels count = 1 for main buffer + size of aux buffer stack
+            if (!fBufferMain.isEmpty()) count++;
+            count += fBufferAux.size();
+            return count;
         }
 
         /** Has the buffer pending lines or not */
         public boolean hasPendingLines() {
-            // TODO: STUB
-            return false;
+            return !isAuxBufferEmpty();
         }
 
         /** Is the buffer empty or not */
         public boolean isEmpty() {
-            // TODO: STUB
+            if (fBufferMain.isEmpty()) {
+                // Aux buffer must be empty as well
+                // TODO: remove later
+                assert !fBufferAux.isEmpty();
+                // Check the aux buffer, just in case
+                if (fBufferAux.isEmpty()) return true;
+            }
             return false;
         }
     }
