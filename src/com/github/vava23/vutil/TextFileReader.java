@@ -1,7 +1,10 @@
 package com.github.vava23.vutil;
 
+import java.io.BufferedReader;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -81,10 +84,10 @@ public class TextFileReader {
          *  Reads the "pending" line (line from a sequence that was stored in
          *  buffer before the current record began)
          */
-        public String readPendingLine() {
+        public String readPendingLine() throws IllegalStateException {
             // Take the top level of the auxiliary buffer (line sequence
             // The buffer must exist
-            if (fBufferAux.isEmpty()) { throw new java.lang.IllegalStateException(); }
+            if (fBufferAux.isEmpty()) { throw new IllegalStateException(); }
             Queue<String> topFileBuffer = fBufferAux.peek();
             // Take the next line
             // A line sequence must exist as the aux buffer takes origin from
@@ -98,9 +101,9 @@ public class TextFileReader {
         }
 
         /** Reads line from buffer */
-        public String readLine() {
+        public String readLine() throws IllegalStateException {
             // Buffer must be not empty
-            if (fBufferMain.size() > 0) { throw new java.lang.IllegalStateException(); }
+            if (fBufferMain.size() > 0) { throw new IllegalStateException(); }
             // Read a line from main buffer
             String result = fBufferMain.remove();
             // If the buffer becomes empty, get the next level buffer from
@@ -146,9 +149,11 @@ public class TextFileReader {
     }
 
     /** Stream for file reading */
-    private FileInputStream fFileStream;
-    /** Reader object to read lines from stream */
+//    private FileInputStream fFileStream;
+    /** Reader object to read characters from file */
     private FileReader fFileReader;
+    /** Reader object to read lines from file */
+    private BufferedReader fLineReader;
     /** Number of the current file line */
     private long fCurrentLine;
     /** Number of the bookmarked line */
@@ -159,21 +164,53 @@ public class TextFileReader {
     private FileBuffer fFileBuffer;
 
     /** Opens the text file specified */
-    protected void openFile() {
-        // TODO: STUB
-        return;
+    protected void openFile(final String aPath) throws IOException {
+        // Close a previously opened file
+        if (fLineReader != null)
+            closeFile();
+        assert (fLineReader == null);
+        // TODO: consider using BufferedReader for huge files
+        fFileReader = new FileReader(aPath);
+        fLineReader = new BufferedReader(fFileReader);
+        fBookmarkState = BookmarkState.NONE;
+        fCurrentLine = 0;
+        fBookmarkedLine = 0;
     }
 
     /** Closes the current file */
-    protected void closeFile() {
-        // TODO: STUB
-        return;
+    protected void closeFile() throws IOException {
+        // TODO: remove these checks later
+        assert (fLineReader != null);
+        assert (fFileReader != null);
+        assert (fFileBuffer != null);
+        fLineReader.close();
+        fFileReader.close();
+        fLineReader = null;
+        fFileReader = null;
+        fFileBuffer.clear();
+    }
+
+    /** End Of FileReader stream reached */
+    protected boolean fileReaderEOF() throws IOException {
+        // TODO: find a better EOF sign
+        return !fLineReader.ready();
     }
 
     /** End Of File reached */
-    protected boolean isEOF() {
-        // TODO: STUB
-        return false;
+    protected boolean isEOF() throws IOException {
+        switch (fBookmarkState) {
+            case NONE:
+                // EOF if the end of file is reached directly
+                return fileReaderEOF();
+            case WRITING:
+                // EOF if stream has ended and buffer has no pending lines
+                return (fileReaderEOF() && !fFileBuffer.hasPendingLines());
+            case READING:
+                // EOF if stream has ended and buffer is empty
+                return (fileReaderEOF() && fFileBuffer.isEmpty());
+            default:
+                return fileReaderEOF();
+        }
     }
 
     /**
@@ -181,32 +218,60 @@ public class TextFileReader {
      * If a file in current position is unavailable, the line is read from a
      * buffer
      */
-    protected String readLineFromFile() {
-        // TODO: STUB
-        return "";
+    protected String readLineFromFile() throws IOException {
+        // Possibility of reading from file is determined by buffer state. If
+        // it has pending lines (lines not read when the new writing process
+        // began), then the required part of file is stored in the buffer
+        if (fFileBuffer.hasPendingLines())
+            // If the line was once read and is now stored in the buffer
+            return fFileBuffer.readPendingLine();
+        else
+            // If the line was not read before, read directly from file
+            return fLineReader.readLine();
     }
 
     /**  */
-    public TextFileReader(final String aPath, final Charset aEncoding) {
-        // TODO: STUB
+    public TextFileReader(final String aPath) throws IOException {
+        fFileBuffer = new FileBuffer();
+        fBookmarkState = BookmarkState.NONE;
+        openFile(aPath);
+        fCurrentLine = 0;
+        fBookmarkedLine = 0;
     }
 
     /** Get the current file encoding  */
-    public Charset getEncoding() {
-        // TODO: STUB
-        return null;
-    }
-
-    /** Force sets the encoding */
-    public void setEncoding(final Charset aEncoding) {
-        // TODO: STUB
-        return;
+    public String getEncoding() {
+        return fFileReader.getEncoding();
     }
 
     /** Reads the subsequent line from file*/
-    public String readNextLine() {
-        // TODO: STUB
-        return "";
+    public String readNextLine() throws IOException, IllegalStateException {
+        if (isEOF()) throw new IllegalStateException();
+        String line;
+        // Read line considering bookmark state
+        switch (fBookmarkState) {
+            // No bookmarks, read directly
+            case NONE:
+                line = fLineReader.readLine();
+                break;
+            // Read line and simultaneously write it to buffer
+            case WRITING:
+                line = readLineFromFile();
+                fFileBuffer.writeLine(line);
+                break;
+            case READING:
+                line = fFileBuffer.readLine();
+                // If the buffer is empty, we've returned to the original
+                // file position
+                if (fFileBuffer.isEmpty()) {
+                    fBookmarkState = BookmarkState.NONE;
+                }
+                break;
+            default:
+                line = fLineReader.readLine();
+        }
+        fCurrentLine++;
+        return line;
     }
 
     /** Fast forwards the file for specified number of lines */
@@ -239,7 +304,7 @@ public class TextFileReader {
     }
 
     /** End Of File reached */
-    public boolean eOF() {
+    public boolean eOF() throws IOException {
         return isEOF();
     }
 
