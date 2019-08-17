@@ -1,11 +1,8 @@
 package com.github.vava23.vutil;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Stack;
@@ -154,6 +151,8 @@ public class TextFileReader {
     private FileReader fFileReader;
     /** Reader object to read lines from file */
     private BufferedReader fLineReader;
+    /** Path to the current file */
+    private String fPath;
     /** Number of the current file line */
     private long fCurrentLine;
     /** Number of the bookmarked line */
@@ -172,6 +171,7 @@ public class TextFileReader {
         // TODO: consider using BufferedReader for huge files
         fFileReader = new FileReader(aPath);
         fLineReader = new BufferedReader(fFileReader);
+        fPath = aPath;
         fBookmarkState = BookmarkState.NONE;
         fCurrentLine = 0;
         fBookmarkedLine = 0;
@@ -188,6 +188,7 @@ public class TextFileReader {
         fLineReader = null;
         fFileReader = null;
         fFileBuffer.clear();
+        fPath = "";
     }
 
     /** End Of FileReader stream reached */
@@ -275,9 +276,12 @@ public class TextFileReader {
     }
 
     /** Fast forwards the file for specified number of lines */
-    public long seek(final long aLength) {
-        // TODO: STUB
-        return -1;
+    public long seek(final long aLength) throws IOException {
+        // Negative seek not supported
+        if (aLength < 1)
+            return 0;
+        else
+            return fLineReader.skip(aLength);
     }
 
     /**
@@ -286,25 +290,45 @@ public class TextFileReader {
      * NB! Avoid reading too far from a bookmark (can run out of memory)
      * */
     public boolean saveBookmark() {
-        // TODO: STUB
-        return false;
+        // No multi-level bookmarks
+        if (fBookmarkState == BookmarkState.WRITING) return false;
+        // From now on, begin to save to buffer
+        fFileBuffer.startWriting();
+        fBookmarkState = BookmarkState.WRITING;
+        // Save the position of bookmark
+        fBookmarkedLine = fCurrentLine;
+        return true;
     }
 
     /**
      * Return to bookmarked position
      * */
-    public void restoreBookmark() {
-        // TODO: STUB
-        return;
+    public boolean restoreBookmark() {
+        // Return to bookmark only if there is one
+        if ((fBookmarkState != BookmarkState.WRITING) || (fBookmarkedLine < 1))
+            return false;
+
+        // From now on, begin to read from buffer
+        if (fFileBuffer.isEmpty()) {
+            fBookmarkState = BookmarkState.NONE;
+        } else {
+            fBookmarkState = BookmarkState.READING;
+            // Line number was saved, now just restore it
+            fCurrentLine = fBookmarkedLine;
+        }
+        return true;
     }
 
     /** Resets the file reading position to beginning */
-    public void resetPosition() {
-        // TODO: STUB
+    public void resetPosition() throws IOException {
+        // TODO: haven't found a better solution so far
+        String path = fPath;
+        closeFile();
+        openFile(fPath);
     }
 
     /** End Of File reached */
-    public boolean eOF() throws IOException {
+    public boolean hasNext() throws IOException {
         return isEOF();
     }
 
