@@ -1,10 +1,9 @@
 package com.github.vava23.vutil;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Scanner;
 import java.util.Stack;
 
 /**
@@ -148,9 +147,9 @@ public class TextFileReader {
     /** Stream for file reading */
 //    private FileInputStream fFileStream;
     /** Reader object to read characters from file */
-    private FileReader fFileReader;
+    private InputStreamReader fFileReader;
     /** Reader object to read lines from file */
-    private BufferedReader fLineReader;
+    private Scanner fLineReader;
     /** Path to the current file */
     private String fPath;
     /** Number of the current file line */
@@ -163,14 +162,16 @@ public class TextFileReader {
     private FileBuffer fFileBuffer;
 
     /** Opens the text file specified */
-    protected void openFile(final String aPath) throws IOException {
+    protected void openFile(final String aPath, String aEncoding) throws IOException {
         // Close a previously opened file
         if (fLineReader != null)
             closeFile();
         assert (fLineReader == null);
         // TODO: consider using BufferedReader for huge files
-        fFileReader = new FileReader(aPath);
-        fLineReader = new BufferedReader(fFileReader);
+
+        FileInputStream stream = new FileInputStream(aPath);
+        fFileReader = new InputStreamReader(stream, aEncoding);
+        fLineReader = new Scanner(fFileReader);
         fPath = aPath;
         fBookmarkState = BookmarkState.NONE;
         fCurrentLine = 0;
@@ -194,7 +195,7 @@ public class TextFileReader {
     /** End Of FileReader stream reached */
     protected boolean fileReaderEOF() throws IOException {
         // TODO: find a better EOF sign
-        return !fLineReader.ready();
+        return !fLineReader.hasNext();
     }
 
     /** End Of File reached */
@@ -228,14 +229,14 @@ public class TextFileReader {
             return fFileBuffer.readPendingLine();
         else
             // If the line was not read before, read directly from file
-            return fLineReader.readLine();
+            return fLineReader.nextLine();
     }
 
     /**  */
-    public TextFileReader(final String aPath) throws IOException {
+    public TextFileReader(final String aPath, final String aEncoding) throws IOException {
         fFileBuffer = new FileBuffer();
         fBookmarkState = BookmarkState.NONE;
-        openFile(aPath);
+        openFile(aPath, aEncoding);
         fCurrentLine = 0;
         fBookmarkedLine = 0;
     }
@@ -253,7 +254,7 @@ public class TextFileReader {
         switch (fBookmarkState) {
             // No bookmarks, read directly
             case NONE:
-                line = fLineReader.readLine();
+                line = fLineReader.nextLine();
                 break;
             // Read line and simultaneously write it to buffer
             case WRITING:
@@ -269,7 +270,7 @@ public class TextFileReader {
                 }
                 break;
             default:
-                line = fLineReader.readLine();
+                line = fLineReader.nextLine();
         }
         fCurrentLine++;
         return line;
@@ -280,8 +281,15 @@ public class TextFileReader {
         // Negative seek not supported
         if (aLength < 1)
             return 0;
-        else
-            return fLineReader.skip(aLength);
+
+        // Retrieve a next line specified number of times
+        long count = 0;
+        while (fLineReader.hasNextLine() && (count < aLength)) {
+            fLineReader.nextLine();
+            count++;
+        }
+        // Return the actual number of skipped lines
+        return count;
     }
 
     /**
@@ -324,12 +332,12 @@ public class TextFileReader {
         // TODO: haven't found a better solution so far
         String path = fPath;
         closeFile();
-        openFile(fPath);
+        openFile(fPath, getEncoding());
     }
 
     /** End Of File reached */
     public boolean hasNext() throws IOException {
-        return isEOF();
+        return !isEOF();
     }
 
     /** Current line number */
